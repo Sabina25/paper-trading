@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Пользователь — хранит email, пароль, имя
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+
+  account   Account?
+}
+
+// Аккаунт — у каждого пользователя один аккаунт с балансом
+model Account {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  balance   Decimal  @default(10000) @db.Decimal(18, 2)
+  createdAt DateTime @default(now())
+
+  user      User       @relation(fields: [userId], references: [id])
+  positions Position[]
+  orders    Order[]
+}
+
+// Актив — акция (AAPL, TSLA и т.д.) с текущей ценой
+model Asset {
+  id        String   @id @default(uuid())
+  symbol    String   @unique
+  name      String
+  price     Decimal  @db.Decimal(18, 2)
+  updatedAt DateTime @updatedAt
+
+  positions Position[]
+  orders    Order[]
+}
+
+// Позиция — сколько акций конкретного актива держит пользователь
+model Position {
+  id        String   @id @default(uuid())
+  accountId String
+  assetId   String
+  quantity  Decimal  @db.Decimal(18, 8)
+  avgPrice  Decimal  @db.Decimal(18, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  account   Account  @relation(fields: [accountId], references: [id])
+  asset     Asset    @relation(fields: [assetId], references: [id])
+
+  @@unique([accountId, assetId])
+}
+
+// Ордер — запись о каждой покупке или продаже
+model Order {
+  id        String      @id @default(uuid())
+  accountId String
+  assetId   String
+  type      OrderType
+  side      OrderSide
+  quantity  Decimal     @db.Decimal(18, 8)
+  price     Decimal     @db.Decimal(18, 2)
+  status    OrderStatus @default(FILLED)
+  createdAt DateTime    @default(now())
+
+  account   Account     @relation(fields: [accountId], references: [id])
+  asset     Asset       @relation(fields: [assetId], references: [id])
+}
+
+enum OrderType {
+  MARKET
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderStatus {
+  FILLED
+  CANCELLED
+}
