@@ -16,6 +16,16 @@ Paper Trading Platform is a full-stack application that simulates a real-world t
 
 ---
 
+## 🌐 Live Demo
+
+**[🚀 Try Paper Trading → https://paper-trading-frontend-chi.vercel.app](https://paper-trading-frontend-chi.vercel.app)**
+
+| Login | Dashboard | Portfolio |
+|:---:|:---:|:---:|
+| ![Login](./assets/login.png) | ![Dashboard](./assets/dashboard.png) | ![Portfolio](./assets/portfolio.png) |
+
+---
+
 ## ✨ Key Features
 
 ### 📊 Real-Time Market Data
@@ -85,9 +95,11 @@ Paper Trading Platform is a full-stack application that simulates a real-world t
 - **Authentication**: JWT + bcryptjs
 
 ### Infrastructure
-- **Containerization**: Docker + Docker Compose
-- **Database**: PostgreSQL 16 (Alpine)
-- **Cache**: Redis 7 (Alpine)
+- **Frontend Hosting**: Vercel
+- **Backend Hosting**: Railway
+- **Database**: Railway PostgreSQL
+- **Cache**: Railway Redis
+- **Containerization**: Docker + Docker Compose (local development)
 
 ---
 
@@ -125,7 +137,7 @@ docker-compose up -d
 ### 3. Set up the backend
 ```bash
 cd apps/backend
-cp .env.example .env    # fill in your values
+cp .env.example .env
 npm install
 npx prisma migrate dev
 npm run dev
@@ -222,7 +234,7 @@ JWT_SECRET="your-secret-key"
 
 ### Frontend — `apps/frontend/.env.local`
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:3001/api
+NEXT_PUBLIC_API_URL=https://paper-trading-production-817b.up.railway.app/api
 ```
 
 ---
