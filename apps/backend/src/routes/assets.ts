@@ -1,12 +1,11 @@
-import { Router, Response, Request } from 'express';
+import { Router, Response } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { getAllPrices } from '../services/marketData';
 import prisma from '../lib/prisma';
-import redis from '../lib/redis';
 
 const router = Router();
 
-// GET /api/assets — list of all assets
+// GET /api/assets
 router.get('/', authMiddleware, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
     const prices = await getAllPrices();
@@ -22,28 +21,23 @@ router.get('/', authMiddleware, async (_req: AuthRequest, res: Response): Promis
   }
 });
 
-// GET /api/assets/stream — SSE stream of live prices
-// This keeps a persistent connection open and pushes price updates
+// GET /api/assets/stream — SSE live prices
 router.get('/stream', authMiddleware, async (_req: AuthRequest, res: Response): Promise<void> => {
-  // Set SSE headers — this tells the browser to keep connection open
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  // Send current prices immediately on connect
   const sendPrices = async () => {
     const prices = await getAllPrices();
-    // SSE format: "data: {...}\n\n"
     res.write(`data: ${JSON.stringify(prices)}\n\n`);
   };
 
   await sendPrices();
 
-  // Push new prices every 3 seconds
-  const interval = setInterval(sendPrices, 3000);
+  // Push every 5 seconds (data from Redis, Finnhub updates every 60s)
+  const interval = setInterval(sendPrices, 5000);
 
-  // Clean up when client disconnects
   _req.on('close', () => {
     clearInterval(interval);
   });

@@ -1,99 +1,119 @@
 import prisma from '../lib/prisma';
 import redis from '../lib/redis';
 
-// Список акций с начальными ценами
-const INITIAL_ASSETS = [
-  { symbol: 'AAPL', name: 'Apple Inc.', price: 175.00 },
-  { symbol: 'TSLA', name: 'Tesla Inc.', price: 245.00 },
-  { symbol: 'GOOGL', name: 'Alphabet Inc.', price: 140.00 },
-  { symbol: 'MSFT', name: 'Microsoft Corp.', price: 415.00 },
-  { symbol: 'AMZN', name: 'Amazon.com Inc.', price: 185.00 },
-  { symbol: 'NVDA', name: 'NVIDIA Corp.', price: 875.00 },
-  { symbol: 'META', name: 'Meta Platforms Inc.', price: 505.00 },
-  { symbol: 'NFLX', name: 'Netflix Inc.', price: 635.00 },
+const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
+const FINNHUB_BASE_URL = 'https://finnhub.io/api/v1';
+
+// Our tracked assets
+const ASSETS = [
+  { symbol: 'AAPL', name: 'Apple Inc.' },
+  { symbol: 'TSLA', name: 'Tesla Inc.' },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.' },
+  { symbol: 'MSFT', name: 'Microsoft Corp.' },
+  { symbol: 'AMZN', name: 'Amazon.com Inc.' },
+  { symbol: 'NVDA', name: 'NVIDIA Corp.' },
+  { symbol: 'META', name: 'Meta Platforms Inc.' },
+  { symbol: 'NFLX', name: 'Netflix Inc.' },
 ];
 
-// Создаём акции в БД при старте сервера
-// upsert = создай если нет, обнови если есть
+// Fetch real price from Finnhub
+async function fetchPrice(symbol: string): Promise<number | null> {
+  try {
+    const res = await fetch(
+      `${FINNHUB_BASE_URL}/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`
+    );
+    const data = await res.json() as { c: number };
+    // Finnhub returns { c: currentPrice, h: high, l: low, o: open, pc: prevClose }
+    if (data.c && data.c > 0) {
+      return parseFloat(data.c.toFixed(2));
+    }
+    return null;
+  } catch (err) {
+    console.error(`Failed to fetch price for ${symbol}:`, err);
+    return null;
+  }
+}
+
+// Create assets in DB on startup if they don't exist
 export async function seedAssets(): Promise<void> {
-  for (const asset of INITIAL_ASSETS) {
-    await prisma.asset.upsert({
-      where: { symbol: asset.symbol },
-      update: {},  // если акция уже есть — ничего не меняем
-      create: {
-        symbol: asset.symbol,
-        name: asset.name,
-        price: asset.price,
-      },
-    });
+  for (const asset of ASSETS) {
+    const existing = await prisma.asset.findUnique({ where: { symbol: asset.symbol } });
+    if (!existing) {
+      await prisma.asset.create({
+        data: {
+          symbol: asset.symbol,
+          name: asset.name,
+          price: 0,
+        },
+      });
+    }
   }
   console.log('Assets seeded');
 }
 
-// Случайно меняем цену от -1% до +1%
-// Это имитирует колебания рынка
-function randomPriceChange(currentPrice: number): number {
-  const changePercent = (Math.random() - 0.5) * 0.02;
-  const newPrice = currentPrice * (1 + changePercent);
-  return Math.max(1, parseFloat(newPrice.toFixed(2))); // минимум $1
-}
-
-// Обновляем цены всех акций
+// Fetch and update all prices from Finnhub
 export async function updatePrices(): Promise<void> {
-  const assets = await prisma.asset.findMany();
+  console.log('Fetching real prices from Finnhub...');
 
-  for (const asset of assets) {
-    const newPrice = randomPriceChange(Number(asset.price));
+  for (const asset of ASSETS) {
+    const price = await fetchPrice(asset.symbol);
 
-    // Сохраняем новую цену в PostgreSQL
+    if (!price) {
+      console.warn(`No price returned for ${asset.symbol}, skipping`);
+      continue;
+    }
+
+    // Update PostgreSQL
     await prisma.asset.update({
-      where: { id: asset.id },
-      data: { price: newPrice },
+      where: { symbol: asset.symbol },
+      data: { price },
     });
 
-    // Сохраняем в Redis для быстрого доступа
-    // redis.set(ключ, значение) — просто как словарь
+    // Update Redis for fast access
     await redis.set(
-      `price:${asset.symbol}`,  // ключ, например: "price:AAPL"
+      `price:${asset.symbol}`,
       JSON.stringify({
         symbol: asset.symbol,
         name: asset.name,
-        price: newPrice,
+        price,
         updatedAt: new Date().toISOString(),
       })
     );
+
+    console.log(`${asset.symbol}: $${price}`);
   }
 }
 
-// Получить цену одной акции из Redis
+// Get single price from Redis
 export async function getPrice(symbol: string): Promise<number | null> {
   const data = await redis.get(`price:${symbol}`);
   if (!data) return null;
   return JSON.parse(data).price;
 }
 
-// Получить цены всех акций из Redis
+// Get all prices from Redis
 export async function getAllPrices(): Promise<Record<string, any>[]> {
-  const assets = await prisma.asset.findMany({ select: { symbol: true } });
   const prices = [];
-
-  for (const asset of assets) {
+  for (const asset of ASSETS) {
     const data = await redis.get(`price:${asset.symbol}`);
     if (data) prices.push(JSON.parse(data));
   }
-
   return prices;
 }
 
-// Запускаем автоматическое обновление цен каждые 3 секунды
+// Start price updater — fetch from Finnhub every 60 seconds
 export function startPriceUpdater(): void {
+  // Fetch immediately on startup
+  updatePrices().catch(console.error);
+
+  // Then every 60 seconds
   setInterval(async () => {
     try {
       await updatePrices();
     } catch (err) {
       console.error('Price update error:', err);
     }
-  }, 3000);
+  }, 60000);
 
-  console.log('Price updater started (every 3s)');
+  console.log('Price updater started (Finnhub, every 60s)');
 }

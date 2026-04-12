@@ -1,6 +1,6 @@
 # Paper Trading Platform 📈
 
-> **A full-stack paper trading platform with real-time price simulation and virtual portfolio management**
+> **A full-stack paper trading platform with real market data and virtual portfolio management**
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
@@ -12,7 +12,7 @@
 
 ## 🚀 Overview
 
-Paper Trading Platform is a full-stack application that simulates a real-world trading system with virtual funds. Users can register, receive a **$10,000 demo account**, browse live-updating stock prices, execute buy/sell orders, and track their portfolio performance in real time.
+Paper Trading Platform is a full-stack application that lets users trade stocks with **real market prices** and virtual funds. Users register, receive a **$10,000 demo account**, and can buy/sell real stocks (AAPL, TSLA, NVDA and more) with live prices pulled from Finnhub API every minute.
 
 ---
 
@@ -28,20 +28,21 @@ Paper Trading Platform is a full-stack application that simulates a real-world t
 
 ## ✨ Key Features
 
-### 📊 Real-Time Market Data
-- **Server-Sent Events (SSE)** for live price streaming — no polling
-- **Simulated price engine** updating 8 stocks every 3 seconds
-- **Redis caching** for fast price access
-- **● Live** indicator showing active SSE connection status
+### 📊 Real Market Data
+- **Finnhub API** integration for real stock prices
+- Prices updated every **60 seconds** from live market feed
+- **Redis caching** for instant price access between updates
+- **Server-Sent Events (SSE)** pushing updates to frontend every 5 seconds
+- **● Live** indicator showing active connection status
 
 ### 💼 Trading Engine
-- **Market orders** with instant execution
+- **Market orders** with instant execution at current real price
 - **Transactional integrity** — all trades use PostgreSQL transactions
 - **Balance & position validation** before every execution
 - **Automatic account creation** with $10,000 virtual balance on registration
 
 ### 📈 Portfolio Tracking
-- **Real-time unrealized P&L** calculated from live prices
+- **Real-time unrealized P&L** calculated from live Finnhub prices
 - **Position management** with weighted average price calculation
 - **Full order history** with timestamps
 - **Total equity** = cash balance + market value of all positions
@@ -50,56 +51,51 @@ Paper Trading Platform is a full-stack application that simulates a real-world t
 - **JWT-based authentication** with 7-day expiry
 - **Bcrypt password hashing**
 - **Protected routes** on both frontend and backend
-- **Token passed via query param** for SSE compatibility
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
-│   Frontend      │         │   Backend       │         │   Database      │
-│   (Next.js)     │◄──SSE──►│   (Express.js)  │◄───────►│   (PostgreSQL)  │
-│                 │         │                 │         │                 │
-│ • TypeScript    │         │ • TypeScript    │         │ • Prisma ORM    │
-│ • React         │         │ • REST API      │         │ • Transactions  │
-│ • TanStack Query│         │ • SSE Stream    │         │                 │
-│ • Tailwind CSS  │         │ • JWT Auth      │         └─────────────────┘
-└─────────────────┘         └─────────────────┘
-                                    │
-                                    ▼
-                             ┌─────────────────┐
-                             │   Redis Cache   │
-                             │                 │
-                             │ • Live prices   │
-                             │ • Fast access   │
-                             └─────────────────┘
+┌─────────────────┐         ┌─────────────────┐         ┌──────────────────┐
+│   Frontend      │         │   Backend       │         │   Finnhub API    │
+│   (Next.js)     │◄──SSE──►│   (Express.js)  │────────►│  (Real Prices)   │
+│                 │         │                 │         │                  │
+│ • TypeScript    │         │ • REST API      │         │ • Every 60s      │
+│ • TanStack Query│         │ • SSE Stream    │         │ • 8 stocks       │
+│ • Tailwind CSS  │         │ • JWT Auth      │         └──────────────────┘
+└─────────────────┘         └────────┬────────┘
+                                     │
+                          ┌──────────┴──────────┐
+                          │                     │
+                          ▼                     ▼
+                 ┌─────────────────┐   ┌─────────────────┐
+                 │   PostgreSQL    │   │   Redis Cache   │
+                 │                 │   │                 │
+                 │ • Users         │   │ • Live prices   │
+                 │ • Accounts      │   │ • Fast access   │
+                 │ • Positions     │   │   between API   │
+                 │ • Orders        │   │   calls         │
+                 └─────────────────┘   └─────────────────┘
 ```
+
+**Data flow:**
+1. Backend fetches real prices from **Finnhub API** every 60 seconds
+2. Prices stored in **Redis** for fast access and **PostgreSQL** for persistence
+3. **SSE stream** pushes cached prices to all connected frontend clients every 5 seconds
+4. Frontend receives updates and re-renders prices and P&L in real time
 
 ---
 
 ## 🛠️ Tech Stack
 
-### Frontend
-- **Framework**: Next.js 15 with TypeScript
-- **Styling**: Tailwind CSS
-- **Data Fetching**: TanStack Query (React Query)
-- **HTTP Client**: Axios
-- **Real-time**: Server-Sent Events (EventSource API)
+**Frontend:** Next.js 15 · TypeScript · Tailwind CSS · TanStack Query · Axios · SSE
 
-### Backend
-- **Runtime**: Node.js with TypeScript
-- **Framework**: Express.js
-- **Database**: PostgreSQL 16 with Prisma ORM 5
-- **Cache**: Redis 7 (ioredis)
-- **Authentication**: JWT + bcryptjs
+**Backend:** Node.js · Express.js · TypeScript · Prisma ORM · PostgreSQL · Redis · JWT
 
-### Infrastructure
-- **Frontend Hosting**: Vercel
-- **Backend Hosting**: Railway
-- **Database**: Railway PostgreSQL
-- **Cache**: Railway Redis
-- **Containerization**: Docker + Docker Compose (local development)
+**Market Data:** Finnhub API (real-time stock prices)
+
+**Infrastructure:** Vercel (frontend) · Railway (backend + database + cache) · Docker
 
 ---
 
@@ -112,7 +108,7 @@ User ──────────────► Account (balance: $10,000)
                          │
                          └──► Order (assetId, side, quantity, price, status)
 
-Asset (symbol, name, price) ──► updated every 3s via price simulation engine
+Asset (symbol, name, price) ──► updated every 60s via Finnhub API
 ```
 
 ---
@@ -122,6 +118,7 @@ Asset (symbol, name, price) ──► updated every 3s via price simulation engi
 ### Prerequisites
 - Node.js 20+
 - Docker Desktop
+- Finnhub API key (free at [finnhub.io](https://finnhub.io))
 
 ### 1. Clone the repository
 ```bash
@@ -137,7 +134,7 @@ docker-compose up -d
 ### 3. Set up the backend
 ```bash
 cd apps/backend
-cp .env.example .env
+cp .env.example .env    # fill in your values
 npm install
 npx prisma migrate dev
 npm run dev
@@ -175,7 +172,7 @@ paper-trading/
 │   │   │   │   ├── assets.ts        # Stock prices + SSE stream
 │   │   │   │   └── portfolio.ts     # Portfolio, orders, trading
 │   │   │   ├── services/
-│   │   │   │   └── marketData.ts    # Price simulation engine
+│   │   │   │   └── marketData.ts    # Finnhub API integration
 │   │   │   └── index.ts             # App entry point
 │   │   └── package.json
 │   └── frontend/
@@ -184,8 +181,10 @@ paper-trading/
 │       │   │   ├── login/           # Login / Register page
 │       │   │   └── dashboard/       # Main trading dashboard
 │       │   ├── components/
+│       │   │   ├── dashboard/       # StatsCards, AssetTable, OrderPanel...
 │       │   │   └── ProtectedRoute.tsx
 │       │   ├── hooks/
+│       │   │   ├── usePortfolio.ts  # Dashboard logic
 │       │   │   └── usePriceStream.ts  # SSE hook
 │       │   ├── lib/
 │       │   │   ├── api.ts           # Axios API client
@@ -230,6 +229,7 @@ PORT=3001
 DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5433/paper_trading"
 REDIS_URL="redis://localhost:6379"
 JWT_SECRET="your-secret-key"
+FINNHUB_API_KEY="your-finnhub-api-key"
 ```
 
 ### Frontend — `apps/frontend/.env.local`
